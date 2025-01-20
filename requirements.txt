@@ -1,0 +1,2 @@
+nvidia-ml-py==12.560.30
+psutil==6.1.1
