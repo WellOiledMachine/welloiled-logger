@@ -4,9 +4,11 @@ import time
 import argparse
 import csv
 import os
-from datetime import datetime
 import subprocess
+from pathlib import Path
+from datetime import datetime
 from collections import namedtuple
+
 
 MONITOR_PID = os.getpid()  # The PID of the monitor process
 
@@ -52,19 +54,17 @@ def parse_arguments():
         help="The interval (in seconds) between monitoring samples.",
     )
 
-    default_output_dir = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "monitoring_results"
-    )
+    default_output_dir = Path(__file__).parent.parent / "monitoring_results"
     parser.add_argument(
         "-o",
         "--output_dir",
-        type=str,
+        type=Path,
         default=default_output_dir,
         help="The directory to save the monitoring results. Default: ../monitoring_results",
     )
     args = parser.parse_args()
     # Expand user and resolve any symlinks in the path
-    args.output_dir = os.path.abspath(os.path.expanduser(args.output_dir))
+    args.output_dir = args.output_dir.expanduser().resolve()
 
     return args
 
@@ -158,12 +158,12 @@ if __name__ == "__main__":
     pynvml.nvmlInit()
     gpu_count = pynvml.nvmlDeviceGetCount()
 
-    args.output_dir = os.path.join(args.output_dir, monitor_timestamp)
-    os.makedirs(args.output_dir, exist_ok=True)
+    args.output_dir = args.output_dir / f"PID{args.pid}_{monitor_timestamp}"
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Define output files. One for process info and one for GPU info
-    psinfo_file = os.path.join(args.output_dir, "psinfo.csv")
-    gpuinfo_file = os.path.join(args.output_dir, "gpuinfo.csv")
+    psinfo_file = args.output_dir / "psinfo.csv"
+    gpuinfo_file = args.output_dir / "gpuinfo.csv"
 
     # Open output files and monitor the process
     with (
@@ -204,10 +204,10 @@ if __name__ == "__main__":
             command = " ".join(args.command)
 
             # Execute command and redirect stdout and stderr to log files
-            stdout = os.path.join(args.output_dir, "stdout.log")
-            stderr = os.path.join(args.output_dir, "stderr.log")
+            stdout = args.output_dir / "stdout.log"
+            stderr = args.output_dir / "stderr.log"
             with open(stdout, "w") as out, open(stderr, "w") as err:
-                # print(f"Running command: {command}")
+                print(f"Running command: {command}")
                 proc = subprocess.Popen(
                     command,
                     shell=True,

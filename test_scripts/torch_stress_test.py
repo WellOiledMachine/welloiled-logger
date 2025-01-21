@@ -1,7 +1,7 @@
 import time
 import argparse
 import torch
-from MonitorSpawner import MonitorSpawner
+# from MonitorSpawner import MonitorSpawner
 
 
 def matrix_multiply(size, device):
@@ -38,8 +38,8 @@ if __name__ == "__main__":
         raise ValueError("Invalid mode. Please use 'cpu' or 'cuda'.")
 
     # Initialize the monitor
-    monitor = MonitorSpawner(interval=1, output_dir=args.output)
-    monitor.start_monitor()
+    # monitor = MonitorSpawner(interval=1, output_dir=args.output)
+    # monitor.start_monitor()
 
     print(f"Running heavy computation in {args.mode} mode...")
 
