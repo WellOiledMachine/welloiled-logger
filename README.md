@@ -28,7 +28,7 @@ cd py-process-monitor
 > ```
 The required python modules can be installed using this command:
 ```
-pip install requirements.txt
+pip install -r ./requirements.txt
 ```
 **3. Done!**
 
