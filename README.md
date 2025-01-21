@@ -60,10 +60,12 @@ These options allow for the monitor to be used either by passing it the PID of a
 
 **Examples**
 ```
-# CORRECT way to pass a command to the monitor script. Note how -c is the last flag passed to the monitor.
+# CORRECT way to pass a command to the monitor script.
+# Note how -c is the last flag passed to the monitor.
 python3 src/monitor.py -o ../monitor_results -i 3 -c ~/example_script.sh arg1 arg2
 
-# INCORRECT way to pass a command to the monitor script. -c option is not the last option!
+# INCORRECT way to pass a command to the monitor script. 
+# The -c option is not the last option!
 python3 src/monitor.py -c ~/example_script.sh arg1 arg2 -o ../monitor_results -i 3
 
 # Passing a PID to the monitor is easy. The flag order doesn't matter.
