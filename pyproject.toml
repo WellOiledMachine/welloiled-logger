@@ -1,0 +1,15 @@
+[tool.ruff]
+exclude = [
+    ".venv",
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+]
+line-length = 88
+
+target-version = "py37"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+fixable = ["A", "B", "C", "D", "E", "F"]

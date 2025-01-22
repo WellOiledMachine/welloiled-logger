@@ -1,12 +1,14 @@
-import pynvml
-import psutil
-import time
 import argparse
 import csv
 import os
 import subprocess
-from pathlib import Path
+import time
 from datetime import datetime
+from pathlib import Path
+
+import psutil
+import pynvml
+
 from utils import ProcessInfo, check_for_nvidia_gpu
 
 MONITOR_PID = os.getpid()  # The PID of the monitor process
@@ -45,7 +47,8 @@ def parse_arguments():
         "--output_dir",
         type=Path,
         default=default_output_dir,
-        help="The directory to save the monitoring results. Default: ../monitoring_results",
+        help="The directory to save the monitoring results. \
+        Default: ../monitoring_results",
     )
     args = parser.parse_args()
     # Expand user and resolve any symlinks in the path
@@ -54,12 +57,13 @@ def parse_arguments():
     return args
 
 
-def sync_process_children(process, children_map={}):
+def sync_process_children(process, children_map=None):
     """
     Update the dictionary of child processes of a given process.
     This function will take care not to redefine any of the existing process
     objects in the dictionary. Doing so would cause the process objects to
-    reset their CPU and memory usage statistics every time they we wanted to update them.
+    reset their CPU and memory usage statistics every time they we wanted to
+    update them.
 
     Parameters
     ----------
@@ -75,6 +79,9 @@ def sync_process_children(process, children_map={}):
         The updated (or newly created) dictionary of child processes.
     """
     global MONITOR_PID
+
+    if children_map is None:
+        children_map = {}
 
     current_children = set(process.children(recursive=True))
 
@@ -152,147 +159,150 @@ if __name__ == "__main__":
     gpuinfo_file = args.output_dir / "gpuinfo.csv"
 
     # Open output files and monitor the process
-    with (
-        open(psinfo_file, mode="w", newline="") as psinfo,
-        open(gpuinfo_file, mode="w", newline="") as gpuinfo,
-    ):
-        ps_writer = csv.writer(psinfo)
-        ps_writer.writerow(
-            [
-                "Timestamp (Unix)",
-                "CPU Utilization (%)",
-                "Thread Count",
-                "RAM Utilization (Bytes)",
-                "RAM Utilization (%)",
-                "Disk Read (Bytes)",
-                "Disk Write (Bytes)",
-                "Disk Read Operations (Count)",
-                "Disk Write Operations (Count)",
-            ]
-        )
-
-        gpu_writer = csv.writer(gpuinfo)
-        if has_nvidia_gpu:
-            gpu_writer.writerow(
-                [
-                    "Timestamp (Unix)",
-                    "GPU ID",
-                    "GPU Utilization (%)",
-                    "GPU Memory Used (B)",
-                    "GPU Memory Percent (%)",
-                    "GPU Temperature (°C)",
-                    "Power Usage (W)",
-                ]
-            )
-
-            # Initialize NVML to monitor GPU stats
-            pynvml.nvmlInit()
-            gpu_count = pynvml.nvmlDeviceGetCount()
-        else:
-            gpu_writer.writerow(
-                ["`nvidia-smi` not found. No GPU monitoring available."]
-            )
-
-        # If a command is provided, run the command and monitor the process
-        if args.command:
-            # Convert list to single string. Required for using shell=True in Popen
-            command = " ".join(args.command)
-
-            # Execute command and redirect stdout and stderr to log files
-            stdout = args.output_dir / "stdout.log"
-            stderr = args.output_dir / "stderr.log"
-            with open(stdout, "w") as out, open(stderr, "w") as err:
-                print(f"Running command: {command}")
-                proc = subprocess.Popen(
-                    command,
-                    shell=True,
-                    stdin=subprocess.DEVNULL,
-                    stdout=out,
-                    stderr=err,
-                )
-            parent_proc = psutil.Process(proc.pid)
-            args.pid = proc.pid
-        else:
-            parent_proc = psutil.Process(args.pid)
-
-        child_proc_map = sync_process_children(parent_proc)
-
-        while parent_proc.is_running() and parent_proc.status() != psutil.STATUS_ZOMBIE:
-            start_timestamp = time.time()
-
-            # Get Process Info from parent
-            parent_info = get_ps_info(parent_proc)
-            if parent_info is None:
-                break
-
-            # Extract info from dictionary to make code more readable
-            cpu_percent = parent_info.cpu_percent
-            total_ram_used = parent_info.ram_used
-            threads = parent_info.threads
-            disk_read_bytes = parent_info.disk_read_bytes
-            disk_write_bytes = parent_info.disk_write_bytes
-            disk_read_ops = parent_info.disk_read_ops
-            disk_write_ops = parent_info.disk_write_ops
-
-            # Aggregate CPU and RAM usage for child processes
-            for child in child_proc_map:
-                child_info = get_ps_info(child_proc_map[child])
-                if child_info is not None:
-                    cpu_percent += child_info.cpu_percent
-                    total_ram_used += child_info.ram_used
-                    threads += child_info.threads
-                    disk_read_bytes += child_info.disk_read_bytes
-                    disk_write_bytes += child_info.disk_write_bytes
-                    disk_read_ops += child_info.disk_read_ops
-                    disk_write_ops += child_info.disk_write_ops
-
-            total_ram_used_percent = (total_ram_used / total_ram_avail) * 100
-
+    with open(psinfo_file, mode="w", newline="") as psinfo:
+        with open(gpuinfo_file, mode="w", newline="") as gpuinfo:
+            ps_writer = csv.writer(psinfo)
             ps_writer.writerow(
                 [
-                    start_timestamp,
-                    cpu_percent,
-                    threads,
-                    total_ram_used,
-                    total_ram_used_percent,
-                    disk_read_bytes,
-                    disk_write_bytes,
-                    disk_read_ops,
-                    disk_write_ops,
+                    "Timestamp (Unix)",
+                    "CPU Utilization (%)",
+                    "Thread Count",
+                    "RAM Utilization (Bytes)",
+                    "RAM Utilization (%)",
+                    "Disk Read (Bytes)",
+                    "Disk Write (Bytes)",
+                    "Disk Read Operations (Count)",
+                    "Disk Write Operations (Count)",
                 ]
             )
 
+            gpu_writer = csv.writer(gpuinfo)
             if has_nvidia_gpu:
-                for i in range(gpu_count):
-                    gpu = pynvml.nvmlDeviceGetHandleByIndex(i)
-                    utilization = pynvml.nvmlDeviceGetUtilizationRates(gpu)
-                    memory = pynvml.nvmlDeviceGetMemoryInfo(gpu)
-                    temperature = pynvml.nvmlDeviceGetTemperature(gpu, 0)
-                    power = pynvml.nvmlDeviceGetPowerUsage(gpu) / 1000
-                    mem_percent = memory.used / memory.total * 100
-                    gpu_writer.writerow(
-                        [
-                            start_timestamp,
-                            i,
-                            utilization.gpu,
-                            memory.used,
-                            mem_percent,
-                            temperature,
-                            power,
-                        ]
+                gpu_writer.writerow(
+                    [
+                        "Timestamp (Unix)",
+                        "GPU ID",
+                        "GPU Utilization (%)",
+                        "GPU Memory Used (B)",
+                        "GPU Memory Percent (%)",
+                        "GPU Temperature (°C)",
+                        "Power Usage (W)",
+                    ]
+                )
+
+                # Initialize NVML to monitor GPU stats
+                pynvml.nvmlInit()
+                gpu_count = pynvml.nvmlDeviceGetCount()
+            else:
+                gpu_writer.writerow(
+                    ["`nvidia-smi` not found. No GPU monitoring available."]
+                )
+
+            # If a command is provided, run the command and monitor the process
+            if args.command:
+                # Convert list to single string. Required for using shell=True in Popen
+                command = " ".join(args.command)
+
+                # Execute command and redirect stdout and stderr to log files
+                stdout = args.output_dir / "stdout.log"
+                stderr = args.output_dir / "stderr.log"
+                with open(stdout, "w") as out, open(stderr, "w") as err:
+                    print(f"Running command: {command}")
+                    proc = subprocess.Popen(
+                        command,
+                        shell=True,
+                        stdin=subprocess.DEVNULL,
+                        stdout=out,
+                        stderr=err,
                     )
+                parent_proc = psutil.Process(proc.pid)
+                args.pid = proc.pid
+            else:
+                parent_proc = psutil.Process(args.pid)
 
-            # Update the child process map
-            child_proc_map = sync_process_children(parent_proc, child_proc_map)
+            child_proc_map = sync_process_children(parent_proc)
 
-            # Sleep for the remaining time in the interval
-            end_timestamp = time.time()
-            elapsed_time = end_timestamp - start_timestamp
-            sleep_time = max(0, args.interval - elapsed_time)
-            time.sleep(sleep_time)
+            while (
+                parent_proc.is_running()
+                and parent_proc.status() != psutil.STATUS_ZOMBIE
+            ):
+                start_timestamp = time.time()
+
+                # Get Process Info from parent
+                parent_info = get_ps_info(parent_proc)
+                if parent_info is None:
+                    break
+
+                # Extract info from dictionary to make code more readable
+                cpu_percent = parent_info.cpu_percent
+                total_ram_used = parent_info.ram_used
+                threads = parent_info.threads
+                disk_read_bytes = parent_info.disk_read_bytes
+                disk_write_bytes = parent_info.disk_write_bytes
+                disk_read_ops = parent_info.disk_read_ops
+                disk_write_ops = parent_info.disk_write_ops
+
+                # Aggregate CPU and RAM usage for child processes
+                for child in child_proc_map:
+                    child_info = get_ps_info(child_proc_map[child])
+                    if child_info is not None:
+                        cpu_percent += child_info.cpu_percent
+                        total_ram_used += child_info.ram_used
+                        threads += child_info.threads
+                        disk_read_bytes += child_info.disk_read_bytes
+                        disk_write_bytes += child_info.disk_write_bytes
+                        disk_read_ops += child_info.disk_read_ops
+                        disk_write_ops += child_info.disk_write_ops
+
+                total_ram_used_percent = (total_ram_used / total_ram_avail) * 100
+
+                ps_writer.writerow(
+                    [
+                        start_timestamp,
+                        cpu_percent,
+                        threads,
+                        total_ram_used,
+                        total_ram_used_percent,
+                        disk_read_bytes,
+                        disk_write_bytes,
+                        disk_read_ops,
+                        disk_write_ops,
+                    ]
+                )
+
+                if has_nvidia_gpu:
+                    for i in range(gpu_count):
+                        gpu = pynvml.nvmlDeviceGetHandleByIndex(i)
+                        utilization = pynvml.nvmlDeviceGetUtilizationRates(gpu)
+                        memory = pynvml.nvmlDeviceGetMemoryInfo(gpu)
+                        temperature = pynvml.nvmlDeviceGetTemperature(gpu, 0)
+                        power = pynvml.nvmlDeviceGetPowerUsage(gpu) / 1000
+                        mem_percent = memory.used / memory.total * 100
+                        gpu_writer.writerow(
+                            [
+                                start_timestamp,
+                                i,
+                                utilization.gpu,
+                                memory.used,
+                                mem_percent,
+                                temperature,
+                                power,
+                            ]
+                        )
+
+                # Update the child process map
+                child_proc_map = sync_process_children(parent_proc, child_proc_map)
+
+                # Sleep for the remaining time in the interval
+                end_timestamp = time.time()
+                elapsed_time = end_timestamp - start_timestamp
+                sleep_time = max(0, args.interval - elapsed_time)
+                time.sleep(sleep_time)
 
     if has_nvidia_gpu:
         pynvml.nvmlShutdown()
 
-    with open(args.output_dir / f"PID_{args.pid}", "w") as pidfile:
-        pidfile.write(f"The Monitored PID was {args.pid}\n")
+    # # Dumb way to make sure that user can see which PID was monitored
+    # # if they need that information saved for some reason.
+    # with open(args.output_dir / f"PID_{args.pid}", "w") as pidfile:
+    #     pidfile.write(f"The Monitored PID was {args.pid}\n")
