@@ -6,6 +6,7 @@ import subprocess
 import shlex
 import os
 import sys
+from pathlib import Path
 
 
 class MonitorSpawner:
@@ -29,7 +30,7 @@ class MonitorSpawner:
         """
 
         self.interval = max(1, interval)  # Ensure the interval is at least 1 second
-        self.output_dir = os.path.abspath(os.path.expanduser(output_dir))
+        self.output_dir = str(Path(output_dir).expanduser().resolve())
         print(f"Monitoring results will be saved to {self.output_dir}")
 
         self.parent_pid = os.getpid()
@@ -37,7 +38,7 @@ class MonitorSpawner:
 
     def start_monitor(self):
         monitor_script = os.path.join(os.path.dirname(__file__), "monitor.py")
-        command = f"{sys.executable} {monitor_script} -p {self.parent_pid} -i {self.interval} -o {self.output_dir}"
+        command = f"{shlex.quote(sys.executable)} {shlex.quote(monitor_script)} -p {self.parent_pid} -i {self.interval} -o {shlex.quote(self.output_dir)}"
 
         monitor_process = subprocess.Popen(
             shlex.split(command),
