@@ -23,7 +23,7 @@ cd py-process-monitor
 > [!IMPORTANT]  
 > It is recommended to create a virtual environment to manage dependencies and avoid potential conflicts with other Python projects. For a comprehensive guide on creating and using virtual environments, check out the [Python Packaging User Guide on Virtual Environments](https://realpython.com/python-virtual-environments-a-primer/). Otherwise, a virtual environment can easily be created and activated with these commands:
 > ```
-> python -m venv monitor
+> python3 -m venv monitor
 > source ./monitor/bin/activate
 > ```
 The required python modules can be installed using this command:
