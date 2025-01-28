@@ -140,6 +140,20 @@ def get_ps_info(process):
     )
 
 
+def get_ps_gpu_mem(pid):
+    """
+    Get the GPU memory usage of a process.
+
+    Parameters
+    ----------
+    pid : int
+        The process id to query.
+
+    Returns
+    -------
+    """
+
+
 if __name__ == "__main__":
     args = parse_arguments()
 
@@ -182,10 +196,10 @@ if __name__ == "__main__":
                     [
                         "Timestamp (Unix)",
                         "GPU ID",
-                        "GPU Utilization (%)",
-                        "GPU Memory Used (B)",
-                        "GPU Memory Percent (%)",
-                        "GPU Temperature (°C)",
+                        "Utilization (%)",
+                        "Memory (Bytes)",
+                        "Memory (%)",
+                        "Temperature (°C)",
                         "Power Usage (W)",
                     ]
                 )
@@ -195,7 +209,7 @@ if __name__ == "__main__":
                 gpu_count = pynvml.nvmlDeviceGetCount()
             else:
                 gpu_writer.writerow(
-                    ["`nvidia-smi` not found. No GPU monitoring available."]
+                    ["# `nvidia-smi` not found. No GPU monitoring available."]
                 )
 
             # If a command is provided, run the command and monitor the process
@@ -256,20 +270,6 @@ if __name__ == "__main__":
 
                 total_ram_used_percent = (total_ram_used / total_ram_avail) * 100
 
-                ps_writer.writerow(
-                    [
-                        start_timestamp,
-                        cpu_percent,
-                        threads,
-                        total_ram_used,
-                        total_ram_used_percent,
-                        disk_read_bytes,
-                        disk_write_bytes,
-                        disk_read_ops,
-                        disk_write_ops,
-                    ]
-                )
-
                 if has_nvidia_gpu:
                     for i in range(gpu_count):
                         gpu = pynvml.nvmlDeviceGetHandleByIndex(i)
@@ -289,6 +289,20 @@ if __name__ == "__main__":
                                 power,
                             ]
                         )
+
+                ps_writer.writerow(
+                    [
+                        start_timestamp,
+                        cpu_percent,
+                        threads,
+                        total_ram_used,
+                        total_ram_used_percent,
+                        disk_read_bytes,
+                        disk_write_bytes,
+                        disk_read_ops,
+                        disk_write_ops,
+                    ]
+                )
 
                 # Update the child process map
                 child_proc_map = sync_process_children(parent_proc, child_proc_map)
