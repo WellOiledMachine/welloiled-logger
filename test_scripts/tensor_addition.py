@@ -19,6 +19,12 @@ parser.add_argument(
     default=25000,
     help="Size of the tensor to create",
 )
+parser.add_argument(
+    "repeat",
+    type=int,
+    default=5000,
+    help="Number of times to repeat the operation",
+)
 args = parser.parse_args()
 
 # Set the device based on user choice and availability
@@ -36,7 +42,7 @@ a = torch.ones(args.size, args.size, device=device)
 
 # Define the operation
 def operation(x):
-    for _ in range(5000):
+    for _ in range(args.repeat):
         x += 1
     return x
 
