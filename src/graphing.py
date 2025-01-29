@@ -1,11 +1,12 @@
 import argparse
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def plot_disk_throughput(ps_df, save_path):
+def plot_disk_throughput(ps_df, save_path, graph_title):
     """
     Plot Disk Throughput
 
@@ -40,7 +41,7 @@ def plot_disk_throughput(ps_df, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("Disk Throughput (Bytes/s)", fontsize=14)
-    plt.title("Disk Throughput over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
     plt.legend()
@@ -49,7 +50,7 @@ def plot_disk_throughput(ps_df, save_path):
     plt.close()
 
 
-def plot_disk_read_throughput(ps_df, save_path):
+def plot_disk_read_throughput(ps_df, save_path, graph_title):
     """
     Plot Disk Read Throughput
 
@@ -74,7 +75,7 @@ def plot_disk_read_throughput(ps_df, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("Disk Read Throughput (Bytes/s)", fontsize=14)
-    plt.title("Disk Read Throughput over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
 
@@ -82,7 +83,7 @@ def plot_disk_read_throughput(ps_df, save_path):
     plt.close()
 
 
-def plot_disk_write_throughput(ps_df, save_path):
+def plot_disk_write_throughput(ps_df, save_path, graph_title):
     """
     Plot Disk Write Throughput
 
@@ -107,7 +108,7 @@ def plot_disk_write_throughput(ps_df, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("Disk Write Throughput (Bytes/s)", fontsize=14)
-    plt.title("Disk Write Throughput over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
 
@@ -115,7 +116,7 @@ def plot_disk_write_throughput(ps_df, save_path):
     plt.close()
 
 
-def plot_ram_utilization(ps_df, save_path):
+def plot_ram_utilization(ps_df, save_path, graph_title):
     """
     Plot RAM Utilization
 
@@ -140,7 +141,7 @@ def plot_ram_utilization(ps_df, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("RAM Utilization (MiB)", fontsize=14)
-    plt.title("RAM Utilization over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
 
@@ -148,7 +149,7 @@ def plot_ram_utilization(ps_df, save_path):
     plt.close()
 
 
-def plot_cpu_utilization(ps_df, save_path):
+def plot_cpu_utilization(ps_df, save_path, graph_title):
     """
     Plot CPU Utilization
 
@@ -173,7 +174,7 @@ def plot_cpu_utilization(ps_df, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("CPU Utilization (%)", fontsize=14)
-    plt.title("CPU Utilization over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
 
@@ -181,7 +182,7 @@ def plot_cpu_utilization(ps_df, save_path):
     plt.close()
 
 
-def plot_gpu_memory_usage(gpu_dfs, save_path):
+def plot_gpu_memory_usage(gpu_dfs, save_path, graph_title):
     # TODO: Refactor this function to correctly handle situations where each GPU has
     # a different RAM size. The current implementation assumes that all GPUs have the
     # same RAM size.
@@ -252,7 +253,7 @@ def plot_gpu_memory_usage(gpu_dfs, save_path):
     if len(gpu_dfs) > 1:
         fig.legend()
 
-    plt.title("GPU Memory Usage over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
 
     # This seems to be the only way to rotate the x-axis labels in this case.
@@ -265,7 +266,7 @@ def plot_gpu_memory_usage(gpu_dfs, save_path):
     plt.close()
 
 
-def plot_gpu_utilization(gpu_dfs, save_path):
+def plot_gpu_utilization(gpu_dfs, save_path, graph_title):
     """
     Plot GPU Utilization
 
@@ -315,7 +316,7 @@ def plot_gpu_utilization(gpu_dfs, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("GPU Utilization (%)", fontsize=14)
-    plt.title("GPU Utilization over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
 
@@ -323,7 +324,7 @@ def plot_gpu_utilization(gpu_dfs, save_path):
     plt.close()
 
 
-def plot_iops(ps_df, save_path):
+def plot_iops(ps_df, save_path, graph_title):
     """
     Plot Disk IOPS
 
@@ -358,7 +359,7 @@ def plot_iops(ps_df, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("Disk IOPS", fontsize=14)
-    plt.title("Disk IOPS over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
     plt.legend()
@@ -367,7 +368,7 @@ def plot_iops(ps_df, save_path):
     plt.close()
 
 
-def plot_disk_read_iops(ps_df, save_path):
+def plot_disk_read_iops(ps_df, save_path, graph_title):
     """
     Plot Disk read IOPS
 
@@ -392,7 +393,7 @@ def plot_disk_read_iops(ps_df, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("Disk Read IOPS", fontsize=14)
-    plt.title("Disk Read IOPS over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
 
@@ -400,7 +401,7 @@ def plot_disk_read_iops(ps_df, save_path):
     plt.close()
 
 
-def plot_disk_write_iops(ps_df, save_path):
+def plot_disk_write_iops(ps_df, save_path, graph_title):
     """
     Plot Disk Write IOPS
 
@@ -413,6 +414,8 @@ def plot_disk_write_iops(ps_df, save_path):
         The DataFrame containing the disk write IOPS.
     save_dir : str
         The directory where the generated plot image will be saved.
+    graph_title : str
+        The title that will be shown at the top of the graph.
     """
     plt.plot(
         ps_df["datetime"],
@@ -425,7 +428,7 @@ def plot_disk_write_iops(ps_df, save_path):
     plt.xlabel("Time", fontsize=14)
     plt.xticks(rotation=315, ha="left")
     plt.ylabel("Disk Write IOPS", fontsize=14)
-    plt.title("Disk Write IOPS over Time", fontsize=16)
+    plt.title(graph_title, fontsize=16)
     plt.grid(True)
     plt.tight_layout()
 
@@ -449,7 +452,8 @@ def process_gpu_log(logfile):
     Returns
     -------
     gpu_dfs : list of pandas.DataFrame
-        A list of dataframes, where each dataframe contains the processed log data for one GPU.
+        A list of dataframes, where each dataframe contains the processed log data for
+        one GPU.
     """
 
     df = pd.read_csv(logfile)
@@ -543,6 +547,7 @@ if __name__ == "__main__":
     args.dir = Path(args.dir).expanduser().resolve()
     gpuinfo = args.dir / "gpuinfo.csv"
     psinfo = args.dir / "psinfo.csv"
+    graph_title = os.path.join(args.dir.parent.name, args.dir.name)  # noqa: F821
 
     args.save_dir = Path(args.save_dir).expanduser().resolve()
     args.save_dir.mkdir(parents=True, exist_ok=True)
@@ -550,18 +555,20 @@ if __name__ == "__main__":
     gpu_dfs = process_gpu_log(gpuinfo)
     psinfo_df = process_psinfo_log(psinfo)
 
-    # print(f"{psinfo_df['datetime'].dtype}")
-
-    # plot_disk_read_iops(psinfo_df, args.save_dir / "disk_write_iops.png")
-    # plot_disk_write_iops(psinfo_df, args.save_dir / "disk_read_iops.png")
-    # plot_iops(psinfo_df, args.save_dir / "disk_iops.png")
-    # plot_gpu_utilization(gpu_dfs, args.save_dir / "gpu_utilization.png")
-    # plot_gpu_memory_usage(gpu_dfs, args.save_dir / "gpu_memory_usage.png")
-    # plot_cpu_utilization(psinfo_df, args.save_dir / "cpu_utilization.png")
-    # plot_ram_utilization(psinfo_df, args.save_dir / "ram_utilization.png")
-    # plot_disk_write_throughput(psinfo_df, args.save_dir / "disk_write_throughput.png")
-    # plot_disk_read_throughput(psinfo_df, args.save_dir / "disk_read_throughput.png")
-    # plot_disk_throughput(psinfo_df, args.save_dir / "disk_throughput.png")
+    plot_disk_read_iops(psinfo_df, args.save_dir / "disk_write_iops.png", graph_title)
+    plot_disk_write_iops(psinfo_df, args.save_dir / "disk_read_iops.png", graph_title)
+    plot_iops(psinfo_df, args.save_dir / "disk_iops.png", graph_title)
+    plot_gpu_utilization(gpu_dfs, args.save_dir / "gpu_utilization.png", graph_title)
+    plot_gpu_memory_usage(gpu_dfs, args.save_dir / "gpu_memory_usage.png", graph_title)
+    plot_cpu_utilization(psinfo_df, args.save_dir / "cpu_utilization.png", graph_title)
+    plot_ram_utilization(psinfo_df, args.save_dir / "ram_utilization.png", graph_title)
+    plot_disk_write_throughput(
+        psinfo_df, args.save_dir / "disk_write_throughput.png", graph_title
+    )
+    plot_disk_read_throughput(
+        psinfo_df, args.save_dir / "disk_read_throughput.png", graph_title
+    )
+    plot_disk_throughput(psinfo_df, args.save_dir / "disk_throughput.png", graph_title)
 
     # psinfo_df.to_csv(args.save_dir / "psinfo_processed.csv", index=False)
     # print(psinfo_df["datetime"])
