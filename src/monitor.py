@@ -221,6 +221,7 @@ if __name__ == "__main__":
                 stdout = args.output_dir / "stdout.log"
                 stderr = args.output_dir / "stderr.log"
                 with open(stdout, "w") as out, open(stderr, "w") as err:
+                    out.write(f"Running command: {command}\n")
                     print(f"Running command: {command}")
                     proc = subprocess.Popen(
                         command,
