@@ -161,7 +161,7 @@ if __name__ == "__main__":
     total_ram_avail = psutil.virtual_memory().total  # in bytes
     has_nvidia_gpu = check_for_nvidia_gpu()  # Check if NVIDIA GPU is available
     monitor_timestamp = datetime.now().strftime(
-        "%Y_%m_%d_%H%M%S"
+        "%Y_%m_%d_%H-%M-%S"
     )  # Timestamp for the monitoring session
 
     # Create output directory
