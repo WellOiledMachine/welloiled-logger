@@ -1,12 +1,17 @@
 import argparse
+import math
 from pathlib import Path
 
+import matplotlib.dates as mdates
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
 
 # TODO: Add docstrings to the class and methods
-#       Fix date formatting on x-axis
+#       Fix date formatting on x-axis STILL
+#       Decide on better class initialization method
+#           calling the three data processing methods in __init__ seems odd.
 class Graphing:
     def __init__(self, source_dir, save_dir):
         self.source_dir = Path(source_dir).expanduser().resolve()
@@ -17,8 +22,16 @@ class Graphing:
         self.psinfo_log = self.source_dir / "psinfo.csv"
         self.graph_title = self.source_dir.parent.name + "\\" + self.source_dir.name
 
+        self.marker = "o"
+        self.markersize = 4
+        self.linestyle = "-"
+        self.line_color = "blue"
+        self.second_line_color = "orange"
+        self.xtick_rotation = 310
+
         self._process_psinfo()
         self._process_gpuinfo()
+        self._create_xtick_positions()
 
     def _process_psinfo(self):
         df = pd.read_csv(self.psinfo_log)
@@ -36,19 +49,51 @@ class Graphing:
                 "Disk Write Operations (Count)": "disk_write_ops",
             }
         )
-
-        df["datetime"] = pd.to_datetime(df["timestamp"], unit="s")
+        # Make RAM utilization human-readable - Should be able to always use MiB
         df["ram_util_mib"] = df["ram_util_b"] / 1024**2
-        df["time_diff"] = df["datetime"].diff().dt.total_seconds()
-        df["read_diff_b"] = df["disk_read_b"].diff()
-        df["write_diff_b"] = df["disk_write_b"].diff()
-        df["read_throughput"] = df["read_diff_b"] / df["time_diff"]
-        df["write_throughput"] = df["write_diff_b"] / df["time_diff"]
-        df["read_ops_diff"] = df["disk_read_ops"].diff()
-        df["write_ops_diff"] = df["disk_write_ops"].diff()
-        df["read_iops"] = df["read_ops_diff"] / df["time_diff"]
-        df["write_iops"] = df["write_ops_diff"] / df["time_diff"]
+        # Convert timestamp to datetime
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+        # Calculate time difference between each row in seconds
+        df["time_diff"] = df["timestamp"].diff().dt.total_seconds().fillna(0)
 
+        # Set format for x-axis labels
+        if df["timestamp"].dt.date.nunique() > 1:
+            self.time_format = mdates.DateFormatter("%d-%H:%M:%S")
+            self.time_label_format = "DD-HH:MM:SS"
+        else:
+            self.time_format = mdates.DateFormatter("%H:%M:%S")
+            self.time_label_format = "HH:MM:SS"
+
+        ## DATA UNIT CONVERSION ##
+        # Initialize potential volume units for disk read and write amounts
+        volume_units = ["B", "KiB", "MiB", "GiB", "TiB"]
+        # For both read and write values:
+        # Get the power of 1024 that the max value of the column is closest to
+        read_scale_factor = min(
+            math.floor(math.log(df["disk_read_b"].max(), 1024)), len(volume_units) - 1
+        )
+        write_scale_factor = min(
+            math.floor(math.log(df["disk_write_b"].max(), 1024)), len(volume_units) - 1
+        )
+        # Use calculated scale factors to convert bytes to human-readable units
+        df["disk_read_h"] = df["disk_read_b"].apply(
+            lambda x: x / 1024**read_scale_factor
+        )
+        df["disk_write_h"] = df["disk_write_b"].apply(
+            lambda x: x / 1024**write_scale_factor
+        )
+
+        # Use human-readable data volume columns to calculate throughput
+        df["read_throughput"] = df["disk_read_h"].diff().fillna(0) / df["time_diff"]
+        df["write_throughput"] = df["disk_write_h"].diff().fillna(0) / df["time_diff"]
+
+        # Calculate IOPS
+        df["read_iops"] = df["disk_read_ops"].diff().fillna(0) / df["time_diff"]
+        df["write_iops"] = df["disk_write_ops"].diff().fillna(0) / df["time_diff"]
+
+        # Save the converted dataset and other relevant info for graphing purposes
+        self.disk_read_unit = volume_units[read_scale_factor]
+        self.disk_write_unit = volume_units[write_scale_factor]
         self.ps_df = df
 
     def _process_gpuinfo(self):
@@ -65,368 +110,310 @@ class Graphing:
             }
         )
 
+        # We want a list of dataframes, one for each GPU. This will allow us to plot
+        # each GPU's data separately. If only one GPU is present, the list will contain
+        # only one dataframe.
         gpu_dfs = []
-        max_gpu_id = df["id"].nunique()
+        max_gpu_id = df["id"].nunique()  # Get the number of unique GPU IDs
         for gpu_id in range(max_gpu_id):
+            # Filter the dataset to only include the current GPU ID
             gpu_df = df[df["id"] == gpu_id].reset_index(drop=True)
-            gpu_df["datetime"] = pd.to_datetime(gpu_df["timestamp"], unit="s")
+            # Convert timestamp to datetime
+            gpu_df["timestamp"] = pd.to_datetime(gpu_df["timestamp"], unit="s")
+            # Convert memory usage from bytes to MiB
             gpu_df["mem_mib"] = gpu_df["mem_b"] / 1024**2
+            # Add the converted dataset to the list of GPU datasets
             gpu_dfs.append(gpu_df)
 
         self.gpu_dfs = gpu_dfs
 
-    def plot_cpu_utilization(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["cpu_util"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
-        )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("CPU Utilization (%)", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
+    def _create_xtick_positions(self):
+        # Adjust number of ticks based on dataset size
+        df_length = len(self.ps_df)
+        num_ticks = min(9, df_length)
 
-        save_path = self.save_dir / "cpu_utilization.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
+        # Handle small datasets
+        if df_length <= 2:
+            # For very small datasets, use all points as ticks
+            ticks = self.ps_df["timestamp"].copy()
+        else:
+            # Create evenly spaced ticks
+            step = max(1, (df_length - 1) // (num_ticks - 1))
+            ticks = self.ps_df["timestamp"].iloc[::step].reset_index(drop=True)
+
+        # Calculate average time difference between ticks
+        tick_avg_diff = np.diff(ticks).mean()
+
+        # Calculate left padding
+        padding_factor = 0.1
+        left_pad = ticks.iloc[0] - (tick_avg_diff * padding_factor)
+
+        # Grab last timestamp and last tick
+        last_timestamp = self.ps_df["timestamp"].iloc[-1]
+        last_tick = ticks.iloc[-1]
+
+        # Check if extra tick should be added
+        if last_timestamp > last_tick:
+            extra_tick = last_tick + tick_avg_diff
+            ticks = pd.concat([ticks, pd.Series([extra_tick])], ignore_index=True)
+
+        right_pad = ticks.iloc[-1] + tick_avg_diff * padding_factor
+
+        self.padding = (left_pad, right_pad)
+        self.ticks = ticks
+
+    def _plot_y_against_time(self, df, y, title, y_label, save_name):
+        fig, ax = plt.subplots()
+        ax.plot(
+            df["timestamp"],
+            df[y],
+            marker=self.marker,
+            markersize=self.markersize,
+            color=self.line_color,
+            linestyle=self.linestyle,
+        )
+        # Title info
+        ax.set_title(title, fontsize=16)
+        ax.set_xlabel(f"Time ({self.time_label_format})", fontsize=14)
+        ax.set_ylabel(y_label, fontsize=14)
+
+        # Tick manipulation
+        ax.set_xticks(self.ticks)
+        ax.set_xlim(self.padding)
+        ax.tick_params(axis="both", labelsize=10)
+        ax.tick_params(axis="x", rotation=self.xtick_rotation)
+        ax.xaxis.set_major_formatter(self.time_format)
+
+        # Grid and layout
+        ax.grid(True)
+        fig.tight_layout()
+
+        # Save the plot
+        save_path = self.save_dir / save_name
+        fig.savefig(save_path, dpi=300)
+        plt.close(fig)
+
+    def _plot_two_y_against_time(
+        self, df, y1, y2, title, y1_label, y2_label, save_name
+    ):
+        fig, ax = plt.subplots()
+        ax.plot(
+            df["timestamp"],
+            df[y1],
+            marker=self.marker,
+            markersize=self.markersize,
+            color=self.line_color,
+            linestyle=self.linestyle,
+            label=y1_label,
+        )
+        ax.plot(
+            df["timestamp"],
+            df[y2],
+            marker=self.marker,
+            markersize=self.markersize,
+            color=self.second_line_color,
+            linestyle=self.linestyle,
+            label=y2_label,
+        )
+        # Title info
+        ax.set_xlabel(f"Time ({self.time_label_format})", fontsize=14)
+        ax.set_ylabel(y1_label, fontsize=14)
+        ax.set_title(title, fontsize=16)
+
+        # Tick manipulation
+        for label in ax.get_xticklabels():
+            label.set_rotation(self.xtick_rotation)
+            label.set_horizontalalignment("left")
+        ax.tick_params(axis="both", labelsize=10)
+        ax.set_xticks(self.ticks)
+        ax.set_xlim(self.padding)
+        ax.xaxis.set_major_formatter(self.time_format)
+
+        # Grid, layout, and legend
+        ax.grid(True)
+        fig.tight_layout()
+        ax.legend()
+
+        # Save the plot
+        save_path = self.save_dir / save_name
+        fig.savefig(save_path, dpi=300)
+        plt.close(fig)
+
+    def _plot_dual_yaxis_against_time(
+        self, df, y1, y2, title, y1_label, y2_label, save_name
+    ):
+        fig, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        ax1.plot(
+            df["timestamp"],
+            df[y1],
+            marker=self.marker,
+            markersize=self.markersize,
+            color=self.line_color,
+            linestyle=self.linestyle,
+            label=y1_label,
+        )
+        ax2.plot(
+            df["timestamp"],
+            df[y2],
+            marker=self.marker,
+            markersize=self.markersize,
+            color=self.line_color,
+            linestyle=self.linestyle,
+            label=y2_label,
+        )
+        # Title info
+        ax1.set_title(title, fontsize=16)
+        ax1.set_xlabel(f"Time ({self.time_label_format})", fontsize=14)
+        ax1.set_ylabel(y1_label, fontsize=14)
+        ax2.set_ylabel(y2_label, fontsize=14)
+
+        # Tick manipulation
+        for label in ax1.get_xticklabels():
+            label.set_rotation(self.xtick_rotation)
+            label.set_horizontalalignment("left")
+        ax1.tick_params(axis="both", labelsize=10)
+        ax1.set_xticks(self.ticks)
+        ax1.set_xlim(self.padding)
+        ax1.xaxis.set_major_formatter(self.time_format)
+
+        # Grid and layout
+        ax1.grid(True)
+        fig.tight_layout()
+
+        # Save the plot
+        save_path = self.save_dir / save_name
+        fig.savefig(save_path, dpi=300)
+        plt.close(fig)
+
+    def plot_cpu_utilization(self):
+        self._plot_y_against_time(
+            self.ps_df,
+            "cpu_util",
+            self.graph_title,
+            "CPU Utilization (%)",
+            "cpu_utilization.png",
+        )
 
     def plot_ram_utilization(self):
-        fig, ax1 = plt.subplots()
-
-        ax1.plot(
-            self.ps_df["datetime"],
-            self.ps_df["ram_util_mib"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
-            label="RAM Utilization (MiB)",
+        self._plot_dual_yaxis_against_time(
+            self.ps_df,
+            "ram_util_mib",
+            "ram_util_perc",
+            self.graph_title,
+            "RAM Utilization (MiB)",
+            "RAM Utilization (%)",
+            "ram_utilization.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        ax1.set_ylabel("RAM Utilization (MiB)", fontsize=14)
-        ax1.tick_params(axis="y")
-
-        ax2 = ax1.twinx()
-        ax2.plot(
-            self.ps_df["datetime"],
-            self.ps_df["ram_util_perc"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
-            label="RAM Utilization (%)",
-        )
-        ax2.set_ylabel("RAM Utilization (%)", fontsize=14)
-        ax2.tick_params(axis="y")
-
-        plt.title(self.graph_title, fontsize=16)
-        ax1.grid(True)
-
-        for label in ax1.get_xticklabels():
-            label.set_rotation(315)
-            label.set_horizontalalignment("left")
-
-        plt.tight_layout()
-
-        save_path = self.save_dir / "ram_utilization.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
-
-    def plot_disk_throughput(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["read_throughput"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
-            label="Read Throughput",
-        )
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["write_throughput"],
-            marker="x",
-            markersize=4,
-            color="orange",
-            linestyle="-",
-            label="Write Throughput",
-        )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Disk Throughput (Bytes/s)", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-        plt.legend()
-
-        save_path = self.save_dir / "disk_throughput.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_disk_read_throughput(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["read_throughput"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
+        self._plot_y_against_time(
+            self.ps_df,
+            "read_throughput",
+            self.graph_title,
+            f"Disk Read Throughput ({self.disk_read_unit}/s)",
+            "disk_read_throughput.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Disk Read Throughput (Bytes/s)", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-
-        save_path = self.save_dir / "disk_read_throughput.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_disk_write_throughput(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["write_throughput"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
+        self._plot_y_against_time(
+            self.ps_df,
+            "write_throughput",
+            self.graph_title,
+            f"Disk Write Throughput ({self.disk_write_unit}/s)",
+            "disk_write_throughput.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Disk Write Throughput (Bytes/s)", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-
-        save_path = self.save_dir / "disk_write_throughput.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_disk_iops(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["read_iops"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
-            label="Read IOPS",
+        self._plot_two_y_against_time(
+            self.ps_df,
+            "read_iops",
+            "write_iops",
+            self.graph_title,
+            "Read IOPS",
+            "Write IOPS",
+            "disk_iops.png",
         )
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["write_iops"],
-            marker="x",
-            markersize=4,
-            color="orange",
-            linestyle="-",
-            label="Write IOPS",
-        )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Disk IOPS", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-        plt.legend()
-
-        save_path = self.save_dir / "disk_iops.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_disk_read_iops(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["read_iops"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
+        self._plot_y_against_time(
+            self.ps_df,
+            "read_iops",
+            self.graph_title,
+            "Disk Read IOPS",
+            "disk_read_iops.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Disk Read IOPS", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-
-        save_path = self.save_dir / "disk_read_iops.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_disk_write_iops(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["write_iops"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
+        self._plot_y_against_time(
+            self.ps_df,
+            "write_iops",
+            self.graph_title,
+            "Disk Write IOPS",
+            "disk_write_iops.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Disk Write IOPS", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-
-        save_path = self.save_dir / "disk_write_iops.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_total_data_read(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["disk_read_b"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
+        self._plot_y_against_time(
+            self.ps_df,
+            "disk_read_h",
+            self.graph_title,
+            f"Total Data Read ({self.disk_read_unit})",
+            "total_data_read.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Total Data Read (Bytes)", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-
-        save_path = self.save_dir / "total_data_read.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_total_data_written(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["disk_write_b"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
+        self._plot_y_against_time(
+            self.ps_df,
+            "disk_write_h",
+            self.graph_title,
+            f"Total Data Written ({self.disk_write_unit})",
+            "total_data_written.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Total Data Written (Bytes)", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-
-        save_path = self.save_dir / "total_data_written.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_read_count(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["disk_read_ops"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
+        self._plot_y_against_time(
+            self.ps_df,
+            "disk_read_ops",
+            self.graph_title,
+            "Read Operation Count",
+            "read_operation_count.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Read Operation Count", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-
-        save_path = self.save_dir / "read_operation_count.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_write_count(self):
-        plt.plot(
-            self.ps_df["datetime"],
-            self.ps_df["disk_write_ops"],
-            marker="o",
-            markersize=4,
-            color="blue",
-            linestyle="-",
+        self._plot_y_against_time(
+            self.ps_df,
+            "disk_write_ops",
+            self.graph_title,
+            "Write Operation Count",
+            "write_operation_count.png",
         )
-        plt.xlabel("Time", fontsize=14)
-        plt.xticks(rotation=315, ha="left")
-        plt.ylabel("Write Operation Count", fontsize=14)
-        plt.title(self.graph_title, fontsize=16)
-        plt.grid(True)
-        plt.tight_layout()
-
-        save_path = self.save_dir / "write_operation_count.png"
-        plt.savefig(save_path, dpi=300)
-        plt.close()
 
     def plot_gpu_utilization(self):
         for gpu_df in self.gpu_dfs:
-            plt.plot(
-                gpu_df["datetime"],
-                gpu_df["util"],
-                marker="o",
-                markersize=4,
-                color="blue",
-                linestyle="-",
+            self._plot_y_against_time(
+                gpu_df,
+                "util",
+                self.graph_title,
+                "GPU Utilization (%)",
+                f"gpu{gpu_df['id'].iloc[0]}_utilization.png",
             )
-
-            plt.xlabel("Time", fontsize=14)
-            plt.xticks(rotation=315, ha="left")
-            plt.ylabel("GPU Utilization (%)", fontsize=14)
-            plt.title(self.graph_title, fontsize=16)
-            plt.grid(True)
-            plt.tight_layout()
-
-            save_path = self.save_dir / f"gpu{gpu_df['id'].iloc[0]}_utilization.png"
-            plt.savefig(save_path, dpi=300)
-            plt.close()
 
     def plot_gpu_memory(self):
         for gpu_df in self.gpu_dfs:
-            fig, ax1 = plt.subplots()
-
-            ax1.plot(
-                gpu_df["datetime"],
-                gpu_df["mem_mib"],
-                marker="o",
-                markersize=4,
-                color="blue",
-                linestyle="-",
-                label="Memory Usage (MiB)",
+            self._plot_dual_yaxis_against_time(
+                gpu_df,
+                "mem_mib",
+                "mem_perc",
+                self.graph_title,
+                "Memory Usage (MiB)",
+                "Memory Usage (%)",
+                f"gpu{gpu_df['id'].iloc[0]}_memory.png",
             )
-            plt.xlabel("Time", fontsize=14)
-            ax1.set_ylabel("Memory Usage (MiB)", fontsize=14)
-            ax1.tick_params(axis="y")
-
-            ax2 = ax1.twinx()
-            ax2.plot(
-                gpu_df["datetime"],
-                gpu_df["mem_perc"],
-                marker="o",
-                markersize=4,
-                color="blue",
-                linestyle="-",
-                label="Memory Usage (%)",
-            )
-            ax2.set_ylabel("Memory Usage (%)", fontsize=14)
-            ax2.tick_params(axis="y")
-
-            plt.title(self.graph_title, fontsize=16)
-            ax1.grid(True)
-
-            for label in ax1.get_xticklabels():
-                label.set_rotation(315)
-                label.set_horizontalalignment("left")
-
-            plt.tight_layout()
-            save_path = self.save_dir / f"gpu{gpu_df['id'].iloc[0]}_memory.png"
-            plt.savefig(save_path, dpi=300)
-            plt.close()
 
     def plot_psinfo(self):
         self.plot_cpu_utilization()
         self.plot_ram_utilization()
-        self.plot_disk_throughput()
         self.plot_disk_read_throughput()
         self.plot_disk_write_throughput()
         self.plot_disk_iops()
@@ -459,6 +446,5 @@ if __name__ == "__main__":
         help="The directory to save the graphs to.",
     )
     args = parser.parse_args()
-
     graphing = Graphing(args.source_dir, args.save_dir)
     graphing.plot_all()
