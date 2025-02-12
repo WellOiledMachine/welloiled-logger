@@ -14,49 +14,6 @@ from utils import ProcessInfo, check_for_nvidia_gpu
 MONITOR_PID = os.getpid()  # The PID of the monitor process
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="Monitor the system utilization of a process."
-    )
-    group = parser.add_mutually_exclusive_group(required=True)
-
-    group.add_argument(
-        "-p",
-        "--pid",
-        type=int,
-        help="The PID of the process to monitor.",
-    )
-    group.add_argument(
-        "-c",
-        "--command",
-        nargs=argparse.REMAINDER,
-        help="The command to run the process to monitor.",
-    )
-
-    parser.add_argument(
-        "-i",
-        "--interval",
-        type=int,
-        default=1,
-        help="The interval (in seconds) between monitoring samples.",
-    )
-
-    default_output_dir = Path(__file__).parent.parent / "monitoring_results"
-    parser.add_argument(
-        "-o",
-        "--output_dir",
-        type=Path,
-        default=default_output_dir,
-        help="The directory to save the monitoring results. \
-        Default: ../monitoring_results",
-    )
-    args = parser.parse_args()
-    # Expand user and resolve any symlinks in the path
-    args.output_dir = args.output_dir.expanduser().resolve()
-
-    return args
-
-
 def sync_process_children(process, children_map=None):
     """
     Update the dictionary of child processes of a given process.
@@ -122,22 +79,15 @@ def get_ps_info(process):
         threads = process.num_threads()
 
         disk_io = process.io_counters()
-        disk_read_bytes = disk_io.read_bytes
-        disk_write_bytes = disk_io.write_bytes
-        disk_read_ops = disk_io.read_count
-        disk_write_ops = disk_io.write_count
-    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        AttributeError,
+    ):
         return None
 
-    return ProcessInfo(
-        cpu_percent,
-        ram_used,
-        threads,
-        disk_read_bytes,
-        disk_write_bytes,
-        disk_read_ops,
-        disk_write_ops,
-    )
+    return ProcessInfo(cpu_percent, ram_used, threads, disk_io)
 
 
 def get_ps_gpu_mem(pid):
@@ -154,9 +104,41 @@ def get_ps_gpu_mem(pid):
     """
 
 
-if __name__ == "__main__":
-    args = parse_arguments()
+def start_logging(args):
+    """
+    Start logging process and GPU information to CSV files.
 
+    This function creates two log files:
+    1. Process Information: Records CPU, RAM, and Disk utilization.
+    2. GPU Information: Logs GPU metrics IFF an NVIDIA GPU is available and
+       automatically detected.
+
+    Process Metrics:
+    - The logged information captures the total resource usage of the main process
+      and all its subprocesses (child processes) combined.
+    - CPU usage: Sum of CPU utilization across all related processes.
+    - RAM usage: Total memory consumed by the main process and all its subprocesses.
+    - Disk I/O: Cumulative disk read/write operations from all processes.
+    - Threads: Total number of threads across all processes.
+    - (TODO: Not yet implemented) GPU Memory: Memory usage of the GPU by the process.
+
+    GPU Metrics (if available):
+    - GPU utilization
+    - Memory usage
+    - Temperature
+    - Power consumption
+
+    Note on Disk I/O:
+    Since we are interested in the total disk I/O of the main process and all its
+    children, we need to ensure that any children who exit early still have their
+    disk I/O stats accounted for. Therefore, we disk I/O stats are cached
+    and summed up at the end of each monitoring interval.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The command line arguments.
+    """
     # Initialize common variables
     total_ram_avail = psutil.virtual_memory().total  # in bytes
     has_nvidia_gpu = check_for_nvidia_gpu()  # Check if NVIDIA GPU is available
@@ -237,6 +219,8 @@ if __name__ == "__main__":
 
             child_proc_map = sync_process_children(parent_proc)
 
+            # Initialize disk I/O cache to keep track of TOTAL disk I/O stats
+            disk_io_cache = {}
             while (
                 parent_proc.is_running()
                 and parent_proc.status() != psutil.STATUS_ZOMBIE
@@ -252,10 +236,7 @@ if __name__ == "__main__":
                 cpu_percent = parent_info.cpu_percent
                 total_ram_used = parent_info.ram_used
                 threads = parent_info.threads
-                disk_read_bytes = parent_info.disk_read_bytes
-                disk_write_bytes = parent_info.disk_write_bytes
-                disk_read_ops = parent_info.disk_read_ops
-                disk_write_ops = parent_info.disk_write_ops
+                disk_io_cache[parent_proc.pid] = parent_info.disk_io
 
                 # Aggregate CPU and RAM usage for child processes
                 for child in child_proc_map:
@@ -264,10 +245,7 @@ if __name__ == "__main__":
                         cpu_percent += child_info.cpu_percent
                         total_ram_used += child_info.ram_used
                         threads += child_info.threads
-                        disk_read_bytes += child_info.disk_read_bytes
-                        disk_write_bytes += child_info.disk_write_bytes
-                        disk_read_ops += child_info.disk_read_ops
-                        disk_write_ops += child_info.disk_write_ops
+                        disk_io_cache[child] = child_info.disk_io
 
                 total_ram_used_percent = (total_ram_used / total_ram_avail) * 100
 
@@ -291,6 +269,11 @@ if __name__ == "__main__":
                             ]
                         )
 
+                # Sum up all disk stats from the disk_io_cache
+                disk_read_bytes = sum(io.read_bytes for io in disk_io_cache.values())
+                disk_write_bytes = sum(io.write_bytes for io in disk_io_cache.values())
+                disk_read_ops = sum(io.read_count for io in disk_io_cache.values())
+                disk_write_ops = sum(io.write_count for io in disk_io_cache.values())
                 ps_writer.writerow(
                     [
                         start_timestamp,
@@ -317,7 +300,46 @@ if __name__ == "__main__":
     if has_nvidia_gpu:
         pynvml.nvmlShutdown()
 
-    # # Dumb way to make sure that user can see which PID was monitored
-    # # if they need that information saved for some reason.
-    # with open(args.output_dir / f"PID_{args.pid}", "w") as pidfile:
-    #     pidfile.write(f"The Monitored PID was {args.pid}\n")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Monitor the system utilization of a process."
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+
+    group.add_argument(
+        "-p",
+        "--pid",
+        type=int,
+        help="The PID of the process to monitor.",
+    )
+    group.add_argument(
+        "-c",
+        "--command",
+        nargs=argparse.REMAINDER,
+        help="The command to run the process to monitor.",
+    )
+
+    parser.add_argument(
+        "-i",
+        "--interval",
+        type=int,
+        default=1,
+        help="The interval (in seconds) between monitoring samples.",
+    )
+
+    default_output_dir = Path(__file__).parent.parent / "monitoring_results"
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        type=Path,
+        default=default_output_dir,
+        help="The directory to save the monitoring results. \
+        Default: ../monitoring_results",
+    )
+    args = parser.parse_args()
+    # Expand user and resolve any symlinks in the path
+    args.output_dir = args.output_dir.expanduser().resolve()
+
+    # Start logging the process information
+    start_logging(args)
