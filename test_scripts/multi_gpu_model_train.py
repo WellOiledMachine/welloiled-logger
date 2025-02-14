@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -90,7 +91,8 @@ def main(args):
                 optimizer.step()
                 optimizer.zero_grad()
 
-        print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"Epoch {epoch + 1}, Loss: {loss.item()}, Timestamp: {timestamp}")
 
 
 if __name__ == "__main__":
