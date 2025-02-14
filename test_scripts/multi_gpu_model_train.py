@@ -146,11 +146,11 @@ if __name__ == "__main__":
         help=f"Number of classes in the dataset. Default: {NUM_CLASSES}",
     )
     parser.add_argument(
-        "-c",
-        "--conv1_channels",
+        "-hls",
+        "--hidden_layer_size",
         type=int,
         default=CONV1_CHANNELS,
-        help=f"Number of channels in first conv layer. Default: {CONV1_CHANNELS}",
+        help=f"Number of channels in first hidden layer. Default: {CONV1_CHANNELS}",
     )
     parser.add_argument(
         "-fc",
