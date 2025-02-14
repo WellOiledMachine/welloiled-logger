@@ -105,7 +105,7 @@ if __name__ == "__main__":
     # Training control variables
     BATCH_SIZE = 16
     ACCUMULATION_STEPS = 1
-    EPOCHS = 5
+    EPOCHS = 10
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -142,6 +142,13 @@ if __name__ == "__main__":
         type=int,
         default=CONV1_CHANNELS,
         help=f"Number of channels in first conv layer. Default: {CONV1_CHANNELS}",
+    )
+    parser.add_argument(
+        "-fc",
+        "--fc_size",
+        type=int,
+        default=FC_SIZE,
+        help=f"Size of the fully connected layers. Default: {FC_SIZE}",
     )
     parser.add_argument(
         "-ng",
