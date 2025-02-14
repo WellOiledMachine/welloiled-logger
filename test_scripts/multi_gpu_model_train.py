@@ -99,7 +99,7 @@ if __name__ == "__main__":
     INPUT_CHANNELS = 3
     CONV1_CHANNELS = 32
     FC_SIZE = 1024
-    NUM_CLASSES = 1000
+    NUM_CLASSES = 100
     INPUT_SIZE = 224
 
     # Training control variables
@@ -135,6 +135,13 @@ if __name__ == "__main__":
         type=int,
         default=INPUT_SIZE,
         help="Input image size (square images). Default: 224 (will use 224x224 images)",
+    )
+    parser.add_argument(
+        "-nc",
+        "--num_classes",
+        type=int,
+        default=NUM_CLASSES,
+        help=f"Number of classes in the dataset. Default: {NUM_CLASSES}",
     )
     parser.add_argument(
         "-c",
