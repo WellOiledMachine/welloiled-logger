@@ -174,4 +174,18 @@ if __name__ == "__main__":
     args.num_classes = NUM_CLASSES
     args.input_channels = INPUT_CHANNELS
     args.input_size = (args.input_size, args.input_size)
+
+    print("Model Configuration:")
+    print(f"Input Channels: {args.input_channels}")
+    print(f"Input Size: {args.input_size}")
+    print(f"Conv1 Channels: {args.conv1_channels}")
+    print(f"Conv2 Channels: {args.conv2_channels}")
+    print(f"Conv3 Channels: {args.conv3_channels}")
+    print(f"Fully Connected Layer 1 Size: {args.fc1_size}")
+    print(f"Fully Connected Layer 2 Size: {args.fc2_size}")
+    print(f"Number of Classes: {args.num_classes}")
+    print(f"Batch Size: {args.batch_size}")
+    print(f"Accumulation Steps: {args.accumulation_steps}")
+    print(f"Epochs: {args.epochs}")
+
     main(args)
