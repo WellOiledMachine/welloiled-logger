@@ -8,18 +8,23 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 
-# TODO: Add docstrings to the class and methods
-#       Fix date formatting on x-axis STILL
-#       Decide on better class initialization method
-#           calling the three data processing methods in __init__ seems odd.
 class Graphing:
+    """
+    Graphing class for visualizing custom psinfo.csv and gpuinfo.csv logs.
+    The class is initialized with the source directory containing the logs
+    and the save directory for the generated graphs.
+    The class automatically searches for the psinfo.csv and gpuinfo.csv logs
+    in the source directory and processes them for graphing. Then, it generates
+    a series of plots based on the processed data and saves them in the save
+    directory. Each plot shows a different aspect of system performance
+    measured over time.
+    """
+
     def __init__(self, source_dir, save_dir):
         self.source_dir = Path(source_dir).expanduser().resolve()
         self.save_dir = Path(save_dir).expanduser().resolve()
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
-        self.gpuinfo_log = self.source_dir / "gpuinfo.csv"
-        self.psinfo_log = self.source_dir / "psinfo.csv"
         self.graph_title = self.source_dir.parent.name + "\\" + self.source_dir.name
 
         self.marker = "o"
@@ -29,12 +34,21 @@ class Graphing:
         self.second_line_color = "orange"
         self.xtick_rotation = 310
 
-        self._process_psinfo()
-        self._process_gpuinfo()
+        psinfo_log = self.source_dir / "psinfo.csv"
+        gpuinfo_log = self.source_dir / "gpuinfo.csv"
+        self._process_psinfo(psinfo_log)
+        self._process_gpuinfo(gpuinfo_log)
         self._create_xtick_positions()
 
-    def _process_psinfo(self):
-        df = pd.read_csv(self.psinfo_log)
+    def _process_psinfo(self, psinfo_log):
+        """
+        Part of class initialization:
+        Process the psinfo.csv log file to prepare the data for graphing.
+
+        Parameters:
+            psinfo_log (Path): Path to the psinfo.csv log file.
+        """
+        df = pd.read_csv(psinfo_log)
 
         df = df.rename(
             columns={
@@ -96,8 +110,15 @@ class Graphing:
         self.disk_write_unit = volume_units[write_scale_factor]
         self.ps_df = df
 
-    def _process_gpuinfo(self):
-        df = pd.read_csv(self.gpuinfo_log)
+    def _process_gpuinfo(self, gpuinfo_log):
+        """
+        Part of class initialization:
+        Process the gpuinfo.csv log file to prepare the data for graphing.
+
+        Parameters:
+            gpuinfo_log (Path): Path to the gpuinfo.csv log file.
+        """
+        df = pd.read_csv(gpuinfo_log)
         df = df.rename(
             columns={
                 "Timestamp (Unix)": "timestamp",
@@ -128,6 +149,12 @@ class Graphing:
         self.gpu_dfs = gpu_dfs
 
     def _create_xtick_positions(self):
+        """
+        Part of class initialization:
+        Create evenly spaced x-ticks for the plots based on the dataset size.
+        Automatically sets number of ticks, tick positions, and padding, as well
+        as ensuring all data is lined up across all plots.
+        """
         # Adjust number of ticks based on dataset size
         df_length = len(self.ps_df)
         num_ticks = min(9, df_length)
@@ -163,6 +190,10 @@ class Graphing:
         self.ticks = ticks
 
     def _plot_y_against_time(self, df, y, title, y_label, save_name):
+        """
+        Generic plotting method for a single y-axis against time.
+        Customized to work with the processed data from the psinfo.csv and gpuinfo.csv.
+        """
         fig, ax = plt.subplots()
         ax.plot(
             df["timestamp"],
@@ -196,6 +227,10 @@ class Graphing:
     def _plot_two_y_against_time(
         self, df, y1, y2, title, y1_label, y2_label, save_name
     ):
+        """
+        Generic plotting method for two y-datasets against time.
+        Customized to work with the processed data from the psinfo.csv and gpuinfo.csv.
+        """
         fig, ax = plt.subplots()
         ax.plot(
             df["timestamp"],
@@ -242,6 +277,14 @@ class Graphing:
     def _plot_dual_yaxis_against_time(
         self, df, y1, y2, title, y1_label, y2_label, save_name
     ):
+        """
+        Function that plots dual y-axis data against time.
+        'dual y-axis data' refers to two datasets that are identical to each other,
+        relative to their maximum values. Basically, plotting the two datasets should
+        have their datapoints line up exactly when plotted separately.
+        For example, memory utilization (RAM and GPU memory) is plotted in MiB and %,
+        which are identical in terms of the data they represent.
+        """
         fig, ax1 = plt.subplots()
         ax2 = ax1.twinx()
         ax1.plot(
@@ -287,6 +330,7 @@ class Graphing:
         plt.close(fig)
 
     def plot_cpu_utilization(self):
+        """Plot CPU utilization against time."""
         self._plot_y_against_time(
             self.ps_df,
             "cpu_util",
@@ -296,6 +340,10 @@ class Graphing:
         )
 
     def plot_ram_utilization(self):
+        """
+        Plot RAM utilization against time.
+        Uses dual y-axis plot to show MiB and %.
+        """
         self._plot_dual_yaxis_against_time(
             self.ps_df,
             "ram_util_mib",
@@ -307,6 +355,7 @@ class Graphing:
         )
 
     def plot_disk_read_throughput(self):
+        """Plot disk read throughput against time."""
         self._plot_y_against_time(
             self.ps_df,
             "read_throughput",
@@ -316,6 +365,7 @@ class Graphing:
         )
 
     def plot_disk_write_throughput(self):
+        """Plot disk write throughput against time."""
         self._plot_y_against_time(
             self.ps_df,
             "write_throughput",
@@ -325,6 +375,7 @@ class Graphing:
         )
 
     def plot_disk_iops(self):
+        """Plot disk read and write IOPS against time."""
         self._plot_two_y_against_time(
             self.ps_df,
             "read_iops",
@@ -336,6 +387,7 @@ class Graphing:
         )
 
     def plot_disk_read_iops(self):
+        """Plot disk read IOPS against time."""
         self._plot_y_against_time(
             self.ps_df,
             "read_iops",
@@ -345,6 +397,7 @@ class Graphing:
         )
 
     def plot_disk_write_iops(self):
+        """Plot disk write IOPS against time."""
         self._plot_y_against_time(
             self.ps_df,
             "write_iops",
@@ -354,6 +407,7 @@ class Graphing:
         )
 
     def plot_total_data_read(self):
+        """Plot total data read against time."""
         self._plot_y_against_time(
             self.ps_df,
             "disk_read_h",
@@ -363,6 +417,7 @@ class Graphing:
         )
 
     def plot_total_data_written(self):
+        """Plot total data written against time."""
         self._plot_y_against_time(
             self.ps_df,
             "disk_write_h",
@@ -372,6 +427,7 @@ class Graphing:
         )
 
     def plot_read_count(self):
+        """Plot read operation count against time."""
         self._plot_y_against_time(
             self.ps_df,
             "disk_read_ops",
@@ -381,6 +437,7 @@ class Graphing:
         )
 
     def plot_write_count(self):
+        """Plot write operation count against time."""
         self._plot_y_against_time(
             self.ps_df,
             "disk_write_ops",
@@ -390,6 +447,7 @@ class Graphing:
         )
 
     def plot_gpu_utilization(self):
+        """Plot each GPU's individual Utilization against time."""
         for gpu_df in self.gpu_dfs:
             self._plot_y_against_time(
                 gpu_df,
@@ -400,6 +458,10 @@ class Graphing:
             )
 
     def plot_gpu_memory(self):
+        """
+        Plot each GPU's individual Memory Usage against time.
+        Uses dual y-axis plot to show MiB and % for each GPU.
+        """
         for gpu_df in self.gpu_dfs:
             self._plot_dual_yaxis_against_time(
                 gpu_df,
@@ -412,6 +474,7 @@ class Graphing:
             )
 
     def plot_psinfo(self):
+        """Plot all PS info graphs."""
         self.plot_cpu_utilization()
         self.plot_ram_utilization()
         self.plot_disk_read_throughput()
@@ -425,15 +488,22 @@ class Graphing:
         self.plot_write_count()
 
     def plot_gpuinfo(self):
+        """Plot all GPU info graphs."""
         self.plot_gpu_utilization()
         self.plot_gpu_memory()
 
     def plot_all(self):
+        """Plot all graphs."""
         self.plot_psinfo()
         self.plot_gpuinfo()
 
 
 if __name__ == "__main__":
+    """
+    Command-line interface for the Graphing class.
+    Allows the user to specify the source directory containing the logs,
+    and the save directory for the generated graphs.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "source_dir",
