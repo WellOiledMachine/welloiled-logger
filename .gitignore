@@ -1,6 +1,7 @@
 # Output Files
 *.csv
 *.png
+*.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
