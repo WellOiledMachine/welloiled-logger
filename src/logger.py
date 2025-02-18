@@ -11,7 +11,7 @@ import pynvml
 
 from utils import ProcessInfo, check_for_nvidia_gpu
 
-MONITOR_PID = os.getpid()  # The PID of the monitor process
+LOGGER_PID = os.getpid()  # The PID of the logging process
 
 
 def sync_process_children(process, children_map=None):
@@ -35,7 +35,7 @@ def sync_process_children(process, children_map=None):
     children_map : dict
         The updated (or newly created) dictionary of child processes.
     """
-    global MONITOR_PID
+    global LOGGER_PID
 
     if children_map is None:
         children_map = {}
@@ -44,16 +44,14 @@ def sync_process_children(process, children_map=None):
 
     # Remove children that are no longer running
     for pid in list(children_map.keys()):
-        # Make sure that the monitor process is never monitored
+        # Make sure that the logger process is never monitored
         # Also, remove the child if it is no longer a child of the parent process
-        if pid == MONITOR_PID or not any(
-            child.pid == pid for child in current_children
-        ):
+        if pid == LOGGER_PID or not any(child.pid == pid for child in current_children):
             del children_map[pid]
 
     # Add new children
     for child in current_children:
-        if child.pid != MONITOR_PID and child.pid not in children_map:
+        if child.pid != LOGGER_PID and child.pid not in children_map:
             children_map[child.pid] = child
 
     return children_map
@@ -132,7 +130,7 @@ def start_logging(args):
     Since we are interested in the total disk I/O of the main process and all its
     children, we need to ensure that any children who exit early still have their
     disk I/O stats accounted for. Therefore, we disk I/O stats are cached
-    and summed up at the end of each monitoring interval.
+    and summed up at the end of each metric logging interval.
 
     Parameters
     ----------
@@ -142,19 +140,19 @@ def start_logging(args):
     # Initialize common variables
     total_ram_avail = psutil.virtual_memory().total  # in bytes
     has_nvidia_gpu = check_for_nvidia_gpu()  # Check if NVIDIA GPU is available
-    monitor_timestamp = datetime.now().strftime(
+    logger_timestamp = datetime.now().strftime(
         "%Y_%m_%d_%H-%M-%S"
-    )  # Timestamp for the monitoring session
+    )  # Timestamp for the logging session
 
     # Create output directory
-    args.output_dir = args.output_dir / f"{monitor_timestamp}"
+    args.output_dir = args.output_dir / f"{logger_timestamp}"
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Define output files. One for process info and one for GPU info
     psinfo_file = args.output_dir / "psinfo.csv"
     gpuinfo_file = args.output_dir / "gpuinfo.csv"
 
-    # Open output files and monitor the process
+    # Open output files and log the system utilization metrics
     with open(psinfo_file, mode="w", newline="") as psinfo:
         with open(gpuinfo_file, mode="w", newline="") as gpuinfo:
             ps_writer = csv.writer(psinfo)
@@ -186,7 +184,7 @@ def start_logging(args):
                     ]
                 )
 
-                # Initialize NVML to monitor GPU stats
+                # Initialize NVML to record GPU stats
                 pynvml.nvmlInit()
                 gpu_count = pynvml.nvmlDeviceGetCount()
             else:
@@ -194,7 +192,8 @@ def start_logging(args):
                     ["# `nvidia-smi` not found. No GPU monitoring available."]
                 )
 
-            # If a command is provided, run the command and monitor the process
+            # If a command is provided, run the command and log the utilization of
+            # the process
             if args.command:
                 # Convert list to single string. Required for using shell=True in Popen
                 command = " ".join(args.command)
@@ -303,7 +302,7 @@ def start_logging(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Monitor the system utilization of a process."
+        description="Log the system utilization of a process."
     )
     group = parser.add_mutually_exclusive_group(required=True)
 
@@ -311,13 +310,13 @@ if __name__ == "__main__":
         "-p",
         "--pid",
         type=int,
-        help="The PID of the process to monitor.",
+        help="The PID of the process to record resource usage from.",
     )
     group.add_argument(
         "-c",
         "--command",
         nargs=argparse.REMAINDER,
-        help="The command to run the process to monitor.",
+        help="The command to be execute and record resource usage from.",
     )
 
     parser.add_argument(
@@ -325,17 +324,18 @@ if __name__ == "__main__":
         "--interval",
         type=int,
         default=1,
-        help="The interval (in seconds) between monitoring samples.",
+        help="The interval (in seconds) between logging metrics. \
+            Default: 1 second",
     )
 
-    default_output_dir = Path(__file__).parent.parent / "monitoring_results"
+    default_output_dir = Path(__file__).parent.parent / "logging_results"
     parser.add_argument(
         "-o",
         "--output_dir",
         type=Path,
         default=default_output_dir,
-        help="The directory to save the monitoring results. \
-        Default: ../monitoring_results",
+        help="The directory to save the logging results. \
+        Default: ../logging_results",
     )
     args = parser.parse_args()
     # Expand user and resolve any symlinks in the path
