@@ -1,6 +1,8 @@
-import time
 import argparse
+import time
+
 import torch
+
 # from MonitorSpawner import MonitorSpawner
 
 
@@ -45,7 +47,7 @@ if __name__ == "__main__":
 
     # Set up Matrix Sizes
     sizes = [21000]  # Allow for testing multiple matrix sizes. Matrices are square.
-    iterations = 3  # Number of matrix multiplications to perform.
+    iterations = 15  # Number of matrix multiplications to perform.
     # This is just so we can watch the monitoring for longer.
     for size in sizes:
         for _ in range(iterations):

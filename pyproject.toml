@@ -7,7 +7,7 @@ exclude = [
     "dist",
 ]
 line-length = 88
-
+ignore = ["F401"] # Stop deleting my imports!
 target-version = "py37"
 
 [tool.ruff.lint]

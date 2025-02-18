@@ -4,15 +4,7 @@ from collections import namedtuple
 # Define a named tuple datatype to make the code more readable
 ProcessInfo = namedtuple(
     "ProcessInfo",
-    [
-        "cpu_percent",
-        "ram_used",
-        "threads",
-        "disk_read_bytes",
-        "disk_write_bytes",
-        "disk_read_ops",
-        "disk_write_ops",
-    ],
+    ["cpu_percent", "ram_used", "threads", "disk_io"],
 )
 
 

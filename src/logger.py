@@ -11,50 +11,7 @@ import pynvml
 
 from utils import ProcessInfo, check_for_nvidia_gpu
 
-MONITOR_PID = os.getpid()  # The PID of the monitor process
-
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="Monitor the system utilization of a process."
-    )
-    group = parser.add_mutually_exclusive_group(required=True)
-
-    group.add_argument(
-        "-p",
-        "--pid",
-        type=int,
-        help="The PID of the process to monitor.",
-    )
-    group.add_argument(
-        "-c",
-        "--command",
-        nargs=argparse.REMAINDER,
-        help="The command to run the process to monitor.",
-    )
-
-    parser.add_argument(
-        "-i",
-        "--interval",
-        type=int,
-        default=1,
-        help="The interval (in seconds) between monitoring samples.",
-    )
-
-    default_output_dir = Path(__file__).parent.parent / "monitoring_results"
-    parser.add_argument(
-        "-o",
-        "--output_dir",
-        type=Path,
-        default=default_output_dir,
-        help="The directory to save the monitoring results. \
-        Default: ../monitoring_results",
-    )
-    args = parser.parse_args()
-    # Expand user and resolve any symlinks in the path
-    args.output_dir = args.output_dir.expanduser().resolve()
-
-    return args
+LOGGER_PID = os.getpid()  # The PID of the logging process
 
 
 def sync_process_children(process, children_map=None):
@@ -78,7 +35,7 @@ def sync_process_children(process, children_map=None):
     children_map : dict
         The updated (or newly created) dictionary of child processes.
     """
-    global MONITOR_PID
+    global LOGGER_PID
 
     if children_map is None:
         children_map = {}
@@ -87,16 +44,14 @@ def sync_process_children(process, children_map=None):
 
     # Remove children that are no longer running
     for pid in list(children_map.keys()):
-        # Make sure that the monitor process is never monitored
+        # Make sure that the logger process is never monitored
         # Also, remove the child if it is no longer a child of the parent process
-        if pid == MONITOR_PID or not any(
-            child.pid == pid for child in current_children
-        ):
+        if pid == LOGGER_PID or not any(child.pid == pid for child in current_children):
             del children_map[pid]
 
     # Add new children
     for child in current_children:
-        if child.pid != MONITOR_PID and child.pid not in children_map:
+        if child.pid != LOGGER_PID and child.pid not in children_map:
             children_map[child.pid] = child
 
     return children_map
@@ -122,43 +77,82 @@ def get_ps_info(process):
         threads = process.num_threads()
 
         disk_io = process.io_counters()
-        disk_read_bytes = disk_io.read_bytes
-        disk_write_bytes = disk_io.write_bytes
-        disk_read_ops = disk_io.read_count
-        disk_write_ops = disk_io.write_count
-    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        AttributeError,
+    ):
         return None
 
-    return ProcessInfo(
-        cpu_percent,
-        ram_used,
-        threads,
-        disk_read_bytes,
-        disk_write_bytes,
-        disk_read_ops,
-        disk_write_ops,
-    )
+    return ProcessInfo(cpu_percent, ram_used, threads, disk_io)
 
 
-if __name__ == "__main__":
-    args = parse_arguments()
+def get_ps_gpu_mem(pid):
+    """
+    Get the GPU memory usage of a process.
 
+    Parameters
+    ----------
+    pid : int
+        The process id to query.
+
+    Returns
+    -------
+    """
+
+
+def start_logging(args):
+    """
+    Start logging process and GPU information to CSV files.
+
+    This function creates two log files:
+    1. Process Information: Records CPU, RAM, and Disk utilization.
+    2. GPU Information: Logs GPU metrics IFF an NVIDIA GPU is available and
+       automatically detected.
+
+    Process Metrics:
+    - The logged information captures the total resource usage of the main process
+      and all its subprocesses (child processes) combined.
+    - CPU usage: Sum of CPU utilization across all related processes.
+    - RAM usage: Total memory consumed by the main process and all its subprocesses.
+    - Disk I/O: Cumulative disk read/write operations from all processes.
+    - Threads: Total number of threads across all processes.
+    - (TODO: Not yet implemented) GPU Memory: Memory usage of the GPU by the process.
+
+    GPU Metrics (if available):
+    - GPU utilization
+    - Memory usage
+    - Temperature
+    - Power consumption
+
+    Note on Disk I/O:
+    Since we are interested in the total disk I/O of the main process and all its
+    children, we need to ensure that any children who exit early still have their
+    disk I/O stats accounted for. Therefore, we disk I/O stats are cached
+    and summed up at the end of each metric logging interval.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The command line arguments.
+    """
     # Initialize common variables
     total_ram_avail = psutil.virtual_memory().total  # in bytes
     has_nvidia_gpu = check_for_nvidia_gpu()  # Check if NVIDIA GPU is available
-    monitor_timestamp = datetime.now().strftime(
-        "%Y_%m_%d_%H%M%S"
-    )  # Timestamp for the monitoring session
+    logger_timestamp = datetime.now().strftime(
+        "%Y_%m_%d_%H-%M-%S"
+    )  # Timestamp for the logging session
 
     # Create output directory
-    args.output_dir = args.output_dir / f"{monitor_timestamp}"
+    args.output_dir = args.output_dir / f"{logger_timestamp}"
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Define output files. One for process info and one for GPU info
     psinfo_file = args.output_dir / "psinfo.csv"
     gpuinfo_file = args.output_dir / "gpuinfo.csv"
 
-    # Open output files and monitor the process
+    # Open output files and log the system utilization metrics
     with open(psinfo_file, mode="w", newline="") as psinfo:
         with open(gpuinfo_file, mode="w", newline="") as gpuinfo:
             ps_writer = csv.writer(psinfo)
@@ -182,23 +176,24 @@ if __name__ == "__main__":
                     [
                         "Timestamp (Unix)",
                         "GPU ID",
-                        "GPU Utilization (%)",
-                        "GPU Memory Used (B)",
-                        "GPU Memory Percent (%)",
-                        "GPU Temperature (°C)",
+                        "Utilization (%)",
+                        "Memory (Bytes)",
+                        "Memory (%)",
+                        "Temperature (°C)",
                         "Power Usage (W)",
                     ]
                 )
 
-                # Initialize NVML to monitor GPU stats
+                # Initialize NVML to record GPU stats
                 pynvml.nvmlInit()
                 gpu_count = pynvml.nvmlDeviceGetCount()
             else:
                 gpu_writer.writerow(
-                    ["`nvidia-smi` not found. No GPU monitoring available."]
+                    ["# `nvidia-smi` not found. No GPU monitoring available."]
                 )
 
-            # If a command is provided, run the command and monitor the process
+            # If a command is provided, run the command and log the utilization of
+            # the process
             if args.command:
                 # Convert list to single string. Required for using shell=True in Popen
                 command = " ".join(args.command)
@@ -207,6 +202,7 @@ if __name__ == "__main__":
                 stdout = args.output_dir / "stdout.log"
                 stderr = args.output_dir / "stderr.log"
                 with open(stdout, "w") as out, open(stderr, "w") as err:
+                    out.write(f"Running command: {command}\n")
                     print(f"Running command: {command}")
                     proc = subprocess.Popen(
                         command,
@@ -222,6 +218,8 @@ if __name__ == "__main__":
 
             child_proc_map = sync_process_children(parent_proc)
 
+            # Initialize disk I/O cache to keep track of TOTAL disk I/O stats
+            disk_io_cache = {}
             while (
                 parent_proc.is_running()
                 and parent_proc.status() != psutil.STATUS_ZOMBIE
@@ -237,10 +235,7 @@ if __name__ == "__main__":
                 cpu_percent = parent_info.cpu_percent
                 total_ram_used = parent_info.ram_used
                 threads = parent_info.threads
-                disk_read_bytes = parent_info.disk_read_bytes
-                disk_write_bytes = parent_info.disk_write_bytes
-                disk_read_ops = parent_info.disk_read_ops
-                disk_write_ops = parent_info.disk_write_ops
+                disk_io_cache[parent_proc.pid] = parent_info.disk_io
 
                 # Aggregate CPU and RAM usage for child processes
                 for child in child_proc_map:
@@ -249,26 +244,9 @@ if __name__ == "__main__":
                         cpu_percent += child_info.cpu_percent
                         total_ram_used += child_info.ram_used
                         threads += child_info.threads
-                        disk_read_bytes += child_info.disk_read_bytes
-                        disk_write_bytes += child_info.disk_write_bytes
-                        disk_read_ops += child_info.disk_read_ops
-                        disk_write_ops += child_info.disk_write_ops
+                        disk_io_cache[child] = child_info.disk_io
 
                 total_ram_used_percent = (total_ram_used / total_ram_avail) * 100
-
-                ps_writer.writerow(
-                    [
-                        start_timestamp,
-                        cpu_percent,
-                        threads,
-                        total_ram_used,
-                        total_ram_used_percent,
-                        disk_read_bytes,
-                        disk_write_bytes,
-                        disk_read_ops,
-                        disk_write_ops,
-                    ]
-                )
 
                 if has_nvidia_gpu:
                     for i in range(gpu_count):
@@ -290,6 +268,25 @@ if __name__ == "__main__":
                             ]
                         )
 
+                # Sum up all disk stats from the disk_io_cache
+                disk_read_bytes = sum(io.read_bytes for io in disk_io_cache.values())
+                disk_write_bytes = sum(io.write_bytes for io in disk_io_cache.values())
+                disk_read_ops = sum(io.read_count for io in disk_io_cache.values())
+                disk_write_ops = sum(io.write_count for io in disk_io_cache.values())
+                ps_writer.writerow(
+                    [
+                        start_timestamp,
+                        cpu_percent,
+                        threads,
+                        total_ram_used,
+                        total_ram_used_percent,
+                        disk_read_bytes,
+                        disk_write_bytes,
+                        disk_read_ops,
+                        disk_write_ops,
+                    ]
+                )
+
                 # Update the child process map
                 child_proc_map = sync_process_children(parent_proc, child_proc_map)
 
@@ -302,7 +299,47 @@ if __name__ == "__main__":
     if has_nvidia_gpu:
         pynvml.nvmlShutdown()
 
-    # # Dumb way to make sure that user can see which PID was monitored
-    # # if they need that information saved for some reason.
-    # with open(args.output_dir / f"PID_{args.pid}", "w") as pidfile:
-    #     pidfile.write(f"The Monitored PID was {args.pid}\n")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Log the system utilization of a process."
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+
+    group.add_argument(
+        "-p",
+        "--pid",
+        type=int,
+        help="The PID of the process to record resource usage from.",
+    )
+    group.add_argument(
+        "-c",
+        "--command",
+        nargs=argparse.REMAINDER,
+        help="The command to be execute and record resource usage from.",
+    )
+
+    parser.add_argument(
+        "-i",
+        "--interval",
+        type=int,
+        default=1,
+        help="The interval (in seconds) between logging metrics. \
+            Default: 1 second",
+    )
+
+    default_output_dir = Path(__file__).parent.parent / "logging_results"
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        type=Path,
+        default=default_output_dir,
+        help="The directory to save the logging results. \
+        Default: ../logging_results",
+    )
+    args = parser.parse_args()
+    # Expand user and resolve any symlinks in the path
+    args.output_dir = args.output_dir.expanduser().resolve()
+
+    # Start logging the process information
+    start_logging(args)
