@@ -73,10 +73,10 @@ class Graphing:
         # Set format for x-axis labels
         if df["timestamp"].dt.date.nunique() > 1:
             self.time_format = mdates.DateFormatter("%d-%H:%M:%S")
-            self.time_label_format = "D-H:M:S UTC"
+            self.time_label_format = "D-HH:MM:SS UTC"
         else:
             self.time_format = mdates.DateFormatter("%H:%M:%S")
-            self.time_label_format = "H:M:S UTC"
+            self.time_label_format = "HH:MM:SS UTC"
 
         ## DATA UNIT CONVERSION ##
         # Initialize potential volume units for disk read and write amounts
@@ -501,8 +501,9 @@ class Graphing:
 if __name__ == "__main__":
     """
     Command-line interface for the Graphing class.
-    Allows the user to specify the source directory containing the logs,
-    and the save directory for the generated graphs.
+
+    Allows the user to specify the source directory containing the logs, and the save
+    directory for the generated graphs.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(

@@ -1,6 +1,7 @@
 # Output Files
 *.csv
 *.png
+!example_plots/*.png
 *.log
 
 # Byte-compiled / optimized / DLL files

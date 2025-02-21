@@ -123,4 +123,4 @@ options:
 
 > [!NOTE]
 > As explained above, the directory chosen for monitor output is only a parent directory in which a timestamp-named subdirectory will be automatically created, and that is where output files are placed.
-> The graphing script doesn't automatically search this subdirectory, only the directory that you specify. Because of this, you MUST include the subdirectory in the source_dir path. 
+> The graphing script doesn't automatically search this subdirectory, only the directory that you specify. Because of this, you MUST include the subdirectory in the source_dir path.
