@@ -73,10 +73,10 @@ class Graphing:
         # Set format for x-axis labels
         if df["timestamp"].dt.date.nunique() > 1:
             self.time_format = mdates.DateFormatter("%d-%H:%M:%S")
-            self.time_label_format = "DD-HH:MM:SS"
+            self.time_label_format = "D-H:M:S UTC"
         else:
             self.time_format = mdates.DateFormatter("%H:%M:%S")
-            self.time_label_format = "HH:MM:SS"
+            self.time_label_format = "H:M:S UTC"
 
         ## DATA UNIT CONVERSION ##
         # Initialize potential volume units for disk read and write amounts
