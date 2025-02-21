@@ -11,15 +11,17 @@ The logger will record the CPU, RAM, and DISK utilization of a specific process 
 they will all be monitored and have their metrics recorded individually.  
 All logs and command output will be placed in a single, configurable location.
 
-This repository also includes a plotting tool to allow for analyzing resource utilization data. The built-in graphing functionality automatically generates a suite of informative charts, including:
-* CPU Utilization
-* RAM Utilization
-* Read/Write IO Metrics:
+This repository also includes a plotting tool to allow for analyzing resource utilization data. The built-in graphing functionality automatically generates a suite of informative plots. Each plot displays the specific metric on the y-axis against time on the x-axis, using UTC timestamps in HH:MM:SS format for precise temporal tracking.
+
+The generated charts include:
+* CPU Utilization over time
+* RAM Utilization over time, shown as both percentage and actual data amounts
+* Read/Write IO Metrics across time:
   * Throughput
   * IOPS
   * Total Data
   * Operation Count
-* Individual GPU performance, showcasing:
+* Individual GPU performance across time, showcasing:
   * Utilization rates
   * Memory consumption
 
@@ -37,7 +39,7 @@ cd welloiled-logger
 ```
 **2. Install requirements**
 > [!IMPORTANT]  
-> It is recommended to create a virtual environment to manage dependencies and avoid potential conflicts with other Python projects. For a comprehensive guide on creating and using virtual environments, check out the [Python Packaging User Guide on Virtual Environments](https://realpython.com/python-virtual-environments-a-primer/). Otherwise, a virtual environment can easily be created and activated with these commands:
+> It is recommended to create a virtual environment to manage dependencies and avoid potential conflicts with other Python projects. For a comprehensive guide on creating and using virtual environments, check out [Python Virtual Environments: A Primer](https://realpython.com/python-virtual-environments-a-primer/). Otherwise, a virtual environment can easily be created and activated with these commands:
 > ```
 > python3 -m venv <NAME_OF_ENVIRONMENT>
 > source ./<NAME_OF_ENVIRONMENT>/bin/activate
@@ -68,6 +70,11 @@ options:
 ```
 
 These options allow for the logger to accept as input either the provided PID of an already running process, or a provided shell command that it will execute. Providing the logger with a PID will make it simply start logging the metrics of that process, while using a command will make the logger execute the command for you, and start logging its metrics.
+
+* The logger will ALWAYS generate a `psinfo.csv` file containing all process-specific metric details.
+* If your system has proper access to an NVIDIA GPU, then a `gpuinfo.csv` file containing all GPU related metric info will be generated as well.
+* If you use the `-c/--command` option instead of the `-p/--pid` option, the logger will also generate `stdout.log` and `stderr.log` files that contain all stdout and stderr captured from the command.
+ 
 > [!NOTE]
 >When using this script, it's important to note that the output directory specified by the user serves as a parent directory for the actual results.  
 >Here's how the output structure works:
@@ -116,4 +123,4 @@ options:
 
 > [!NOTE]
 > As explained above, the directory chosen for monitor output is only a parent directory in which a timestamp-named subdirectory will be automatically created, and that is where output files are placed.
-> The graphing script doesn't automatically search this subdirectory, only the directory that you specify. Because of this, you MUST include the subdirectory in the source_dir path. 
+> The graphing script doesn't automatically search this subdirectory, only the directory that you specify. Because of this, you MUST include the subdirectory in the source_dir path.
