@@ -502,7 +502,7 @@ if __name__ == "__main__":
     """
     Command-line interface for the Graphing class.
 
-    Allows the user to specify the source directory containing the logs, and the save 
+    Allows the user to specify the source directory containing the logs, and the save
     directory for the generated graphs.
     """
     parser = argparse.ArgumentParser()
