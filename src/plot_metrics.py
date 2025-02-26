@@ -468,8 +468,8 @@ class Graphing:
                 "mem_mib",
                 "mem_perc",
                 self.graph_title,
-                "Memory Usage (MiB)",
-                "Memory Usage (%)",
+                "GPU Memory Usage (MiB)",
+                "GPU Memory Usage (%)",
                 f"gpu{gpu_df['id'].iloc[0]}_memory.png",
             )
 
