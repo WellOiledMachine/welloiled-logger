@@ -52,7 +52,7 @@ pip install -r ./requirements.txt
 
 # ⚙️ Usage
 ## 📝 Logger
-Here is the command line usage of the monitor script:
+Here is the command line usage of the logger script:
 ```
 usage:python src/logger.py [-h] (-p PID | -c ...) [-i INTERVAL] [-o OUTPUT_DIR]
 
@@ -96,16 +96,16 @@ These options allow for the logger to accept as input either the provided PID of
 
 **Examples**
 ```
-# CORRECT way to pass a command to the monitor script.
-# Note how -c is the last flag passed to the monitor.
-python src/monitor.py -o ../monitor_results -i 3 -c ~/example_script.sh arg1 arg2
+# CORRECT way to pass a command to the performance logger.
+# Note how -c is the last flag passed to the logger.
+python src/logger.py -o ../monitor_results -i 3 -c ~/example_script.sh arg1 arg2
 
-# INCORRECT way to pass a command to the monitor script. 
+# INCORRECT way to pass a command to the performance logger. 
 # The -c option is not the last option!
-python src/monitor.py -c ~/example_script.sh arg1 arg2 -o ../monitor_results -i 3
+python src/logger.py -c ~/example_script.sh arg1 arg2 -o ../monitor_results -i 3
 
-# Passing a PID to the monitor is easy. The flag order doesn't matter.
-python src/monitor.py -p 12345 -o ../monitor_results
+# Passing a PID to the logger is easy. The flag order doesn't matter.
+python src/logger.py -p 12345 -o ../monitor_results
 ```
 
 ## 📈 Plotting
@@ -122,5 +122,5 @@ options:
 ```
 
 > [!NOTE]
-> As explained above, the directory chosen for monitor output is only a parent directory in which a timestamp-named subdirectory will be automatically created, and that is where output files are placed.
+> As explained above, the directory chosen for performance monitor output is only a parent directory in which a timestamp-named subdirectory will be automatically created, and that is where output files are placed.
 > The graphing script doesn't automatically search this subdirectory, only the directory that you specify. Because of this, you MUST include the subdirectory in the source_dir path.
