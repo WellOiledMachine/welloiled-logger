@@ -88,7 +88,7 @@ These options allow for the logger to accept as input either the provided PID of
 >* It allows for easy identification of specific execution instances
 
 > [!NOTE]
-> The `--interval` and `--output_dir` options are not required, as they have defaults!
+> The `--interval` and `--output_dir` options are not required, as they have default values!
 
 > [!WARNING]
 > If you wish to use the `-c / --command` option, you MUST add it as LAST OPTION SPECIFIED in the full command.
